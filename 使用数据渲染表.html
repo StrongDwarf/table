@@ -1,0 +1,477 @@
+<!DOCTYPE html>
+<html>
+
+<head>
+    <title>使用数据渲染表</title>
+    <style>
+        * {
+            margin: 0px;
+            padding: 0px
+        }
+        
+        .hide {
+            visibility: hidden;
+        }
+        
+    </style>
+    <link rel="stylesheet" type="text/css" href="./css/iview.css">
+</head>
+
+<body>
+    <div id="table" class="ivu-table ivu-table-default ivu-table-border ivu-table-with-fixed-top" styel="width:1959px;">
+
+    </div>
+</body>
+<script src="./tableData.js"></script>
+<script>
+    let tableEl = document.querySelector('#table');
+
+    
+    renderTable(tableEl, tableColumns, dataList);
+    /**
+     * render table header
+     * 
+     * @param {element} tableEl
+     * @param {Array} columns
+     * @param {Array} dataList
+     */
+    function renderTable(tableEl, columns, dataList) {
+        /* 遍历columns,判断header的分层和宽度 */
+        let widthList = [];             //宽度表    item: width:Number||String
+        let keyList = [];               //key表     保存每一列对应的key,即title对应的key
+        let columnsList = [];           //头部元素表    item: column:Array
+        let count = 0;                  //头部叠加层数
+        let colgroup = null;            //table中行距表
+        let width = {};                 //表宽
+        let height = '500px';               //表高
+
+        formatColumns(columns, dataList);       //该项目的逻辑
+        console.time('test1');
+        resolveColumns(columnsList, columns, count, widthList, keyList);    //将解析头部
+        arrageColumns(columnsList);             //整理columnsList的格式
+        width = getWidth('all',widthList,keyList)
+        dataList = mergeDataList(dataList, "product_id", ["product_id", "destination"]);  //合并相同的数据
+        colgroup = getColgroup(widthList);
+        console.timeEnd('test1');
+        console.time('test2');
+        let tableHeader = renderTableHeader(columnsList,widthList,colgroup,keyList,width);
+        let tableBody = renderTableBody(dataList,widthList,colgroup,keyList,width,height);
+        let tableFixed = renderTableFixed(columnsList,dataList,widthList,colgroup,keyList,width,height);
+        tableEl.appendChild(tableHeader);
+        tableEl.appendChild(tableBody);
+
+        let tableFixedHeader = renderTableFixedHeader(columnsList,widthList,colgroup,keyList,width);
+        let tableFixedBody = renderTableFixedBody(dataList,widthList,colgroup,keyList,width,height);
+        tableFixed.appendChild(tableFixedHeader);
+        tableFixed.appendChild(tableFixedBody);
+        tableEl.appendChild(tableFixed);
+
+        tableBody.addEventListener('scroll',function(e){
+            tableHeader.scrollLeft = this.scrollLeft;
+            tableFixedBody.scrollTop = this.scrollTop;
+        },true)
+        setTimeout(function(){
+            console.timeEnd('test2');
+        })
+
+        //绑定元素
+
+    }
+
+    /**
+     *arrage columns
+     *
+     * @param {Array} columnsList
+     */
+    function arrageColumns(columnsList){
+        let count = columnsList.length;
+        for(let i =0;i<columnsList.length - 1;i++){
+            for(let j = 0;j<columnsList[i].length;j++){
+                columnsList[i][j]['rowspan'] += count
+            }
+        }
+    }
+
+    /** 
+     * get total|left|middle|right|all  width
+     * if type is total|left|middle|right，this function return a number
+     * if type is all, this function return a object include all widths
+     *
+     * @param {String:left|middle|right|total} type
+     * @param {Array:[Number|String,]} widthList
+     * @param {Array:[Object:{fixed,}]} keyList
+     * @param {Number|Object}  return
+     */
+    function getWidth(type,widthList,keyList){
+        let totalWidth = 0;
+        let leftWidth = 0;
+        let middleWidth = 0;
+        let rightWidth = 0;
+        for(let i = 0;i<keyList.length;i++){
+            totalWidth += widthList[i];
+            switch(keyList[i]['fixed']){
+                case 'left':
+                    leftWidth += widthList[i];
+                    break;
+                case 'none':
+                    middleWidth += widthList[i];
+                    break;
+                case 'right':
+                    rightWidth += widthList[i];
+                    break;
+                default:
+                    middleWidth += widthList[i];
+                    break;
+            }
+        }
+        switch(type){
+            case 'left':
+                return leftWidth;
+                break;
+            case 'total':
+                return totalWidth;
+                break;
+            case 'middle':
+                return middleWidth;
+                break;
+            case 'right':
+                return rightWidth;
+                break;
+            case 'all':
+                return {
+                    leftWidth,
+                    middleWidth,
+                    rightWidth,
+                    totalWidth
+                }
+            default:
+                return middleWidth;
+                break;
+        }
+    }
+
+    /**
+     * render table header 
+     *
+     * @param {Array} columnsList 
+     * @param {Array} widthList
+     * @param {String} colgroup
+     * @param {Document Element} return
+     */
+    function renderTableHeader(columnsList,widthList,colgroup,keyList,width){
+        let tableHeader = document.createElement('div');
+        tableHeader.classList.add('ivu-table-header');
+        let htmlstr =  '<table cellspacing="0" cellpadding="0" border="0" style="width:'+ width.totalWidth +'px;">';
+        htmlstr += colgroup + '<thead>';
+        for(let i =0;i<columnsList.length;i++){
+            htmlstr += getTableTr('th','none',columnsList[i]);
+        }
+        htmlstr += '</thead></table>';
+        tableHeader.innerHTML = htmlstr;
+        return tableHeader;
+    }
+
+    function renderTableBody(dataList,widthList,colgroup,keyList,width,height){
+        let tableBody = document.createElement('div');
+        tableBody.classList.add('ivu-table-body');
+        tableBody.classList.add('ivu-table-overflowX');
+        tableBody.classList.add('ivu-table-overflowY');
+        tableBody.style = "height:"+ height+";overflow-y:scroll;";
+        let htmlstr = '<table cellspacing="0" cellpadding="0" border="0" style="width:'+ width.totalWidth+'px;">';
+        htmlstr += colgroup + '<tbody class="ivu-table-tbody">';
+        for(let i=0;i<dataList.length;i++){
+            htmlstr += getTableTr('td','none',dataList[i],keyList);
+        }
+        htmlstr += '</tbody></table>';
+        tableBody.innerHTML = htmlstr;
+        return tableBody;
+    }
+
+    function renderTableFixed(columnsList,dataList,widthList,colgroup,keyList,width,height){
+        let tableFixed = document.createElement('div');
+        tableFixed.classList.add('ivu-table-fixed');
+        tableFixed.style = 'width:'+ width.leftWidth+'px;overflow: hidden;';
+        return tableFixed;
+    }
+
+    function renderTableFixedHeader(columnsList,widthList,colgroup,keyList,width){
+        let tableHeader = document.createElement('div');
+        tableHeader.classList.add('ivu-table-fixed-header');
+        let htmlstr =  '<table cellspacing="0" cellpadding="0" border="0" style="width:'+ width.totalWidth +'px;overflow-x:hidden;">';
+        htmlstr += colgroup + '<thead style="'+width.totalWidth+'px">';
+        for(let i =0;i<columnsList.length;i++){
+            htmlstr += getTableTr('th','left',columnsList[i]);
+        }
+        htmlstr += '</thead></table>';
+        tableHeader.innerHTML = htmlstr;
+        return tableHeader;
+    }
+
+    function renderTableFixedBody(dataList,widthList,colgroup,keyList,width,height){
+        let tableBody = document.createElement('div');
+        tableBody.classList.add('ivu-table-fixed-body');
+        tableBody.style = 'height:'+height;
+        let htmlstr = '<table cellspacing="0" cellpadding="0" border="0" style="width:'+ width.totalWidth+'px;">';
+        htmlstr += colgroup + '<tbody style="ivu-table-tbody">';
+        for(let i=0;i<dataList.length;i++){
+            htmlstr += getTableTr('td','left',dataList[i],keyList);
+        }
+        htmlstr += '</tbody></table>';
+        tableBody.innerHTML = htmlstr;
+        return tableBody;
+    }
+    /**
+     * get table tr, tr just like <tr><td>...</td></tr> or <tr><th>...</th></tr>
+     * tType is td or th,
+     * positionType is where is it;  left|none|right
+     * trList is dataList
+     * when tType is th,don't need keyList.
+     *
+     *
+     * @param {String:th||td} tType
+     * @param {String:left,} positionType
+     * @param {Array} trList
+     * @param {Array} keyList
+     */
+    function getTableTr(tType,positionType,trList,keyList){
+                        //th left data keyList
+        let str = '<tr>';
+        if(tType == 'th'){
+            for(let i = 0;i<trList.length;i++){
+                let cla = ' ';
+                if(trList[i]['fixed'] != positionType){
+                    cla += 'hide'
+                }
+                str += `<th colspan="${trList[i].colspan}" rowspan="${trList[i].rowspan}" class="${cla || ' '}">
+                            <div class="table-cell ${cla}">
+                                <span>${trList[i].title}</span>
+                            </div>
+                        </th>`
+            }
+        }else if(false){
+            //ergodic every data in trList 
+            for(let attr in trList){
+                let cla = ' ';
+                //ergodic every key in keyList
+                for(let j = 0;j<keyList.length;j++){
+                    if(keyList[j]['fixed'] != positionType){
+                        cla += 'hide'
+                    }
+                    //if keyList[j] in trList[i] and trList[i][keyList[j]] is not equal to 0,render this
+                    if(trList[i][keyList[j]] && trList[i][keyList[j]]['rowspan'] != '0'){
+                        str += `<td colspan="1" rowspan="${ trList[i][keyList[j]]['rowspan']}" class="${cla || ''}">
+                                    <div class="table-cell ${cla}">
+                                        <span>${trList[i][keyList[j]]['value']}</span>
+                                    </div>
+                                </td>`
+                    }
+                }
+            }
+        }else{
+            for(let i = 0;i<keyList.length;i++){
+                let cla = ' ';
+                if(keyList[i]['fixed'] != positionType){
+                    cla += 'hide'
+                }
+                if(trList[keyList[i]['key']] && trList[keyList[i]['key']]['rowspan']!= '0'){
+                    str += `<td colspan="1" rowspan="${ trList[keyList[i]['key']]['rowspan']}" class="${cla || ''}">
+                                    <div class="table-cell ${cla}">
+                                        <span>${trList[keyList[i]['key']]['value']}</span>
+                                    </div>
+                            </td>`
+                }
+            }
+        }
+        str += '</tr>'
+        return str;
+    }
+
+    /** 
+     * get colgroup String
+     * 
+     * @param {Array} widthList
+     * @param {String} return
+     */
+    function getColgroup(widthList){
+        let str = '<colgroup>';
+        for(let i =0;i<widthList.length;i++){
+            str += '<col width="'+widthList[i]+'">'
+        }
+        str += '<col width="0"></colgroup>'
+        return str;
+    }
+
+
+    /**
+     * merge keyList in dataList by key
+     * 
+     * @param {Array} dataList
+     * @param {String} key
+     * @param {Array} keyList
+     * @param {key,function} styleRule
+     * @param {Array} return 
+     *    item:{key}
+     */
+    function mergeDataList(dataList, key, keyList) {
+        let renderList = [];        //设置渲染数据
+
+        dataList.sort((a, b) => {
+            return a[key] - b[key]
+        })
+
+        let dataTemp = extendData(dataList[0], []);
+        renderList.push(dataTemp);
+
+        for (let i = 1; i < dataList.length; i++) {
+            //如果相等,将dateTemp中keyList对应的数据rowspan加1，
+            if (dataTemp[key].value == dataList[i][key]) {
+                for (let j of keyList) {
+                    dataTemp[j].rowspan++;
+                }
+                renderList.push(extendData(dataList[i], keyList))
+            } else {
+                let obj = extendData(dataList[i], []);
+                renderList.push(obj);
+                dataTemp = obj;
+            }
+        }
+
+        //console.log(renderList);
+        return renderList;
+
+    }
+
+
+    /** 
+     * entend data
+     * before: Each key in the data corresponds to a string or number
+     * after: Each key in the data corresponds to a object and Each rowspan in object 
+     *        that corresponds the key in the keyList is Number(zero)
+     * 
+     * @param {object} obj
+     * @param {object} obj
+     */
+    function extendData(obj, keyList) {
+        let objTemp = {};
+        for (let i in obj) {
+            if (keyList.indexOf(i) != -1) {
+                objTemp[i] = {
+                    value: obj[i],
+                    rowspan: 0
+                }
+            } else {
+                objTemp[i] = {
+                    value: obj[i],
+                    rowspan: 1
+                }
+            }
+        }
+        return objTemp;
+    }
+
+
+    /**
+     * formart columns
+     * 根据dataList中的数据动态的改变columns
+     */
+    function formatColumns(testColumns, data) {
+        let arr = [];       //设置一个数组用于做去重检验
+        let pos = getPos(testColumns);  //获取渠道实收统计,渠道占位统计，渠道占位统计的位置
+        //遍历datalist中的每一条数据
+        for (let i = 0; i < data.length; i++) {
+
+            //遍历每一条数据中的每一个属性。
+            for (let j in data[i]) {
+                //匹配该属性是否含有1flag,2flag,3flag中的任何一个标记
+                if (j.match(/[123]flag/) && j.match(/[123]flag/).index == j.length - 5) {
+                    let title = j.substr(0, j.length - 5)
+                    //判断数组中有没有,没有则表示还没有插入
+                    if (arr.indexOf(j) == -1) {
+                        //建一个待插入的对象
+                        let o = {
+                            'title': String(title),
+                            'key': String(j),
+                            'align': 'center',
+                            'width': (j.length - 5) * 13,
+                        }
+                        arr.push(j);
+                        switch (j.match(/[123]flag/g)[0]) {
+                            case '1flag':
+                                testColumns[pos[1]].children.push(o);
+                                break;
+                            case '2flag':
+                                testColumns[pos[0]].children.push(o);
+                                break;
+                            case '3flag':
+                                testColumns[pos[2]].children.push(o);
+                                break;
+                            default:
+                                break;
+                        }
+                    }
+                }
+            }
+        }
+    }
+
+
+    //获取渠道实收统计,渠道占位统计，渠道占位统计的位置
+    function getPos(testColumns) {
+        //let keyList = ['total_customer_count','place_holder','hard_cut'];
+        let pos = [];
+        for (let i = 0; i < testColumns.length; i++) {
+            if (testColumns[i].children) {
+                pos.push(i);
+            }
+        }
+        return pos;
+    }
+
+
+    /**
+     * resolve columns translate into standrand columnsList
+     * 
+     * @param {Array} columnsList 
+     * @param {Array} children
+     * @param {Numner} count
+     */
+    function resolveColumns(columnsList, children, count, widthList, keyList) {
+        /* 判断该元素是不是某元素的子元素序列 */
+        if (count - 1 >= 0) {
+            //如果是,需要重置其父元素及其祖先元素的colspan,
+            for (let i = 0; i < count; i++) {
+                let len = columnsList[i].length;
+                columnsList[i][len - 1].colspan = columnsList[i][len - 1].colspan - 1 + children.length;
+                columnsList[i][len - 1].rowspan = columnsList[i][len - 1].rowspan - 1;
+            }
+        }
+        //遍历children中每一条元素
+        for (let i = 0; i < children.length; i++) {
+            if (!columnsList[count]) {
+                let columns = [];
+                columnsList.push(columns);
+            }
+            columnsList[count].push({
+                rowspan: count,
+                colspan: 1,
+                title: children[i].title,
+                fixed:children[i].fixed || 'none',
+            })
+
+            if (children[i].children) {
+                resolveColumns(columnsList, children[i].children, count + 1, widthList, keyList)
+            } else {
+                widthList.push(children[i].width);
+                keyList.push({
+                    'key':children[i].key,
+                    'fixed':children[i].fixed || 'none',
+                });
+
+            }
+        }
+    }
+
+
+</script>
+
+</html>
